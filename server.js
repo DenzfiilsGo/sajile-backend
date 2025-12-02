@@ -4,7 +4,7 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const dotenv = require('dotenv');
-const cors = require('cors'); // ✅ Import CORS
+const cors = require('cors'); 
 const scheduleCleanup = require('./utils/cleanupJob');
 
 // --- PENTING ---
@@ -13,6 +13,7 @@ dotenv.config();
 
 const app = express();
 
+// Menjalankan tugas pembersihan terjadwal (seperti menghapus token kadaluarsa)
 scheduleCleanup();
 
 // Gunakan process.env.PORT (Render) atau fallback ke 5000 (Local)
@@ -28,23 +29,25 @@ app.use(express.json());
 app.use(cors()); 
 
 // Import Routes
-// Asumsi: Anda memiliki rute untuk Autentikasi dan Resep (Recipes)
 app.use('/api/auth', require('./routes/auth')); 
 // app.use('/api/recipes', require('./routes/recipes')); // Jika rute ini ada, aktifkan
 
 // 3. Koneksi ke MongoDB
 mongoose.connect(MONGODB_URI)
-    .then(() => console.log('✅ MongoDB berhasil terhubung!'))
-    .catch(err => console.error('❌ Koneksi MongoDB Gagal:', err.message)); 
+    .then(() => console.log('✅ MongoDB berhasil terhubung!'))
+    .catch(err => console.error('❌ Koneksi MongoDB Gagal:', err.message)); 
 
-// 4. Endpoint Test (Untuk Health Check dan uji koneksi)
+// 4. Endpoint Test (Health Check dan Keep-Alive)
+// Endpoint utama, untuk memverifikasi server berjalan
 app.get('/', (req, res) => {
-    res.send('Server SajiLe Backend Berjalan!');
+    res.send('Server SajiLe Backend Berjalan!');
 });
 
-app.get('/healthz', (req, res) => {
-    // Endpoint yang ideal untuk Health Check Render
-    res.status(200).send('OK');
+// ⭐ TAMBAHAN BARU: Endpoint Health Check Khusus untuk Cron Job ⭐
+// Endpoint ini akan dipanggil oleh layanan pihak ketiga untuk menjaga server tetap aktif (Keep-Alive)
+app.get('/api/healthcheck', (req, res) => {
+    // Memberikan respons status 200 OK
+    res.status(200).json({ status: 'OK', service: 'SajiLe Backend' });
 });
 
 
