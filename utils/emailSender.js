@@ -11,6 +11,9 @@ const transporter = nodemailer.createTransport({
         user: process.env.EMAIL_USER, 
         pass: process.env.EMAIL_PASS, 
     },
+    // ⭐ TAMBAHKAN DUA PROPERTI INI ⭐
+    timeout: 30000,     // Beri waktu 30 detik untuk inisialisasi koneksi.
+    socketTimeout: 60000 // Beri waktu 60 detik untuk transaksi data (lebih aman).
 });
 
 /**
