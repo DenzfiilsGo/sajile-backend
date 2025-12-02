@@ -6,7 +6,12 @@ const jwt = require('jsonwebtoken');
 
 // BARU: Impor library untuk verifikasi
 const crypto = require('crypto');
-const { sendVerificationEmail } = require('../utils/emailSender');
+const { sendVerificationEmail } = require('../utils/emailSender'); // TIDAK ADA PERUBAHAN DI SINI
+
+// URL Frontend dari Environment Variables (HARUS DITAMBAHKAN DI RENDER)
+// Contoh: https://sajile.netlify.app
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000'; 
+
 
 // Fungsi untuk proses Registrasi Pengguna
 exports.register = async (req, res) => {
@@ -40,8 +45,12 @@ exports.register = async (req, res) => {
 
         await user.save(); // Simpan user ke database
 
-        // 6. BUAT LINK VERIFIKASI
-        const verificationLink = `http://localhost:5000/api/auth/verify/${verificationToken}`;
+        // 6. PERBAIKAN KRUSIAL: Ambil host publik dari Render (x-forwarded-host)
+        const apiHost = req.headers['x-forwarded-host'] || req.headers.host; 
+        
+        // Host yang digunakan untuk link verifikasi HARUS host API Anda (sajile-backend.onrender.com)
+        // Kita gunakan req.protocol di depannya (misalnya http atau https)
+        const verificationLink = `${req.protocol}://${apiHost}/api/auth/verify/${verificationToken}`;
 
         // 7. KIRIM EMAIL VERIFIKASI
         const emailSent = await sendVerificationEmail(email, verificationLink);
@@ -116,7 +125,7 @@ exports.login = async (req, res) => {
     }
 };
 
-// FUNGSI BARU: Verifikasi Akun dari link email
+// FUNGSI UTAMA: Verifikasi Akun dari link email (DIMODIFIKASI UNTUK AUTO-LOGIN)
 exports.verifyAccount = async (req, res) => {
     try {
         const token = req.params.token;
@@ -128,11 +137,9 @@ exports.verifyAccount = async (req, res) => {
         });
 
         if (!user) {
-            // HTML response untuk kegagalan (Token tidak valid/kadaluarsa)
-            return res.status(400).send(`
-                <h1>Verifikasi Gagal!</h1>
-                <p>Link verifikasi tidak valid atau sudah kadaluarsa. Silakan registrasi ulang.</p>
-            `);
+            // JIKA GAGAL: Redirect ke halaman login/daftar di frontend
+            // Tambahkan parameter error untuk UX yang lebih baik di frontend
+            return res.redirect(`${FRONTEND_URL}/html/daftar_atau_login.html?status=verification_failed&error=token_invalid`);
         }
 
         // AKUN BERHASIL DIVERIFIKASI
@@ -152,26 +159,20 @@ exports.verifyAccount = async (req, res) => {
         jwt.sign(
             payload,
             process.env.JWT_SECRET,
-            { expiresIn: '1h' },
+            { expiresIn: '7d' }, // Token dibuat lebih lama agar user tidak cepat logout
             (err, token) => {
                 if (err) throw err;
                 
-                // 2. HTML response untuk keberhasilan (Otomatis login dan Redirect)
-                res.send(`
-                    <h1>Verifikasi Berhasil!</h1>
-                    <p>Akun Anda telah berhasil diverifikasi. Anda sekarang dapat menikmati layanan SajiLe.</p>
-                    <script>
-                        // Simpan token ke localStorage dan redirect ke halaman utama (/)
-                        localStorage.setItem('token', '${token}');
-                        window.location.href = '/'; 
-                    </script>
-                `);
+                // 2. BERHASIL: Redirect ke halaman utama frontend dengan token di URL
+                // Frontend (beranda.js) akan menangkap token ini dan melakukan auto-login
+                res.redirect(`${FRONTEND_URL}/index.html?token=${token}&status=verified`);
             }
         );
 
     } catch (err) {
         console.error(err.message);
-        res.status(500).send('Server Error');
+        // Jika ada error internal server, arahkan kembali ke frontend dengan pesan error umum
+        res.redirect(`${FRONTEND_URL}/html/daftar_atau_login.html?error=server_issue`);
     }
 };
 

@@ -1,31 +1,25 @@
 // File: saji-backend/utils/emailSender.js
 
-const nodemailer = require('nodemailer');
+// Import library Resend
+const { Resend } = require('resend');
 
-// 1. Konfigurasi Transporter (Menggunakan kredensial dari .env)
-const transporter = nodemailer.createTransport({
-    // service: 'gmail' adalah konfigurasi cepat untuk server Gmail
-    service: 'gmail', 
-    auth: {
-        // EMAIL_USER & EMAIL_PASS diambil dari .env
-        user: process.env.EMAIL_USER, 
-        pass: process.env.EMAIL_PASS, 
-    },
-    // ⭐ TAMBAHKAN DUA PROPERTI INI ⭐
-    timeout: 30000,     // Beri waktu 30 detik untuk inisialisasi koneksi.
-    socketTimeout: 60000 // Beri waktu 60 detik untuk transaksi data (lebih aman).
-});
+// 1. Inisialisasi Resend dengan API Key dari Environment Variables
+// Menggunakan RESEND_API_KEY
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 /**
- * Mengirim email verifikasi ke pengguna.
+ * Mengirim email verifikasi ke pengguna menggunakan Resend API.
+ * Proses ini menggunakan API HTTP, yang lebih cepat dan lebih andal.
  * @param {string} email - Alamat email tujuan.
  * @param {string} verificationLink - Link verifikasi yang unik.
  */
 const sendVerificationEmail = async (email, verificationLink) => {
-    const mailOptions = {
-        // Nama pengirim yang dilihat pengguna
-        from: `SajiLe Verification <${process.env.EMAIL_USER}>`,
-        to: email,
+    
+    // Objek pesan (format Resend)
+    const msg = {
+        // 'from' harus menggunakan format "Nama <email@anda.com>"
+        from: `SajiLe Verification <${process.env.EMAIL_USER}>`, 
+        to: [email], // Resend menerima array email tujuan
         subject: 'Verifikasi Akun SajiLe Anda',
         html: `
             <h1>Selamat Datang di SajiLe!</h1>
@@ -39,11 +33,20 @@ const sendVerificationEmail = async (email, verificationLink) => {
     };
 
     try {
-        await transporter.sendMail(mailOptions);
-        console.log(`[EMAIL] Sukses: Email verifikasi berhasil dikirim ke ${email}`);
+        // ⭐ PERUBAHAN KRUSIAL: Menggunakan resend.emails.send() ⭐
+        const { data, error } = await resend.emails.send(msg);
+
+        if (error) {
+             console.error(`[EMAIL-RESEND] GAGAL: Gagal mengirim email verifikasi ke ${email}. Error:`, error);
+             return false;
+        }
+
+        console.log(`[EMAIL-RESEND] Sukses: Email verifikasi berhasil dikirim ke ${email}. ID: ${data.id}`);
         return true;
+        
     } catch (error) {
-        console.error(`[EMAIL] GAGAL: Gagal mengirim email verifikasi ke ${email}. Error:`, error.message);
+        // Menangkap error level koneksi
+        console.error(`[EMAIL-RESEND] KRITIS GAGAL: Error saat memanggil Resend API:`, error.message);
         return false;
     }
 };
