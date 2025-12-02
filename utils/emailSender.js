@@ -1,25 +1,35 @@
 // File: saji-backend/utils/emailSender.js
 
-// Import library Resend
-const { Resend } = require('resend');
+// Import library Nodemailer
+const nodemailer = require('nodemailer');
 
-// 1. Inisialisasi Resend dengan API Key dari Environment Variables
-// Menggunakan RESEND_API_KEY
-const resend = new Resend(process.env.RESEND_API_KEY);
+// 1. Konfigurasi Transporter dengan SMTP Pool
+// Transporter ini dibuat HANYA SEKALI saat server dimulai.
+// Pool: true akan menjaga koneksi SMTP tetap hidup untuk penggunaan berulang (anti-timeout).
+const transporter = nodemailer.createTransport({
+    pool: true, 
+    host: 'smtp.gmail.com',
+    port: 465, 
+    secure: true, // Menggunakan SSL (wajib untuk port 465)
+    auth: {
+        user: process.env.EMAIL_USER, // denzfiils999@gmail.com
+        pass: process.env.EMAIL_PASS, // Password Aplikasi Gmail Anda
+    },
+});
 
 /**
- * Mengirim email verifikasi ke pengguna menggunakan Resend API.
- * Proses ini menggunakan API HTTP, yang lebih cepat dan lebih andal.
+ * Mengirim email verifikasi ke pengguna menggunakan Nodemailer (via pool SMTP yang persisten).
  * @param {string} email - Alamat email tujuan.
  * @param {string} verificationLink - Link verifikasi yang unik.
+ * @returns {boolean} - True jika pengiriman berhasil, False jika gagal.
  */
 const sendVerificationEmail = async (email, verificationLink) => {
     
-    // Objek pesan (format Resend)
-    const msg = {
-        // 'from' harus menggunakan format "Nama <email@anda.com>"
-        from: `SajiLe Verification <${process.env.EMAIL_USER}>`, 
-        to: [email], // Resend menerima array email tujuan
+    // Objek pesan
+    const mailOptions = {
+        // Alamat Pengirim
+        from: `SajiLe Verification <${process.env.EMAIL_USER}>`,
+        to: email, // Email tujuan
         subject: 'Verifikasi Akun SajiLe Anda',
         html: `
             <h1>Selamat Datang di SajiLe!</h1>
@@ -33,20 +43,19 @@ const sendVerificationEmail = async (email, verificationLink) => {
     };
 
     try {
-        // ⭐ PERUBAHAN KRUSIAL: Menggunakan resend.emails.send() ⭐
-        const { data, error } = await resend.emails.send(msg);
+        // Menggunakan transporter pool untuk mengirim email
+        const info = await transporter.sendMail(mailOptions);
+        
+        console.log(`[EMAIL-SMTP-POOL] Sukses: Email dikirim ke ${email}. Response ID: ${info.messageId}`);
+        return true;
 
-        if (error) {
-             console.error(`[EMAIL-RESEND] GAGAL: Gagal mengirim email verifikasi ke ${email}. Error:`, error);
-             return false;
+    } catch (error) {
+        console.error(`[EMAIL-SMTP-POOL] GAGAL KRITIS: Gagal mengirim email verifikasi ke ${email}. Error:`, error.message);
+        
+        if (error.code === 'EAUTH') {
+             console.error('Pesan: Periksa EMAIL_PASS di Render. Kemungkinan Password Aplikasi Gmail salah atau sudah kadaluarsa.');
         }
 
-        console.log(`[EMAIL-RESEND] Sukses: Email verifikasi berhasil dikirim ke ${email}. ID: ${data.id}`);
-        return true;
-        
-    } catch (error) {
-        // Menangkap error level koneksi
-        console.error(`[EMAIL-RESEND] KRITIS GAGAL: Error saat memanggil Resend API:`, error.message);
         return false;
     }
 };
