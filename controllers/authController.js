@@ -38,9 +38,17 @@ exports.register = async (req, res) => {
         user.password = await bcrypt.hash(password, salt);
         await user.save(); 
 
-        // Link verifikasi tetap ke Backend Port 5000 
+        // 1. Link verifikasi tetap ke Backend Port 5000 
         const verificationLink = `http://localhost:5000/api/auth/verify/${verificationToken}`;
+        
+        // ===================================================
+        // === DEBUGGING LOG BARU: CEK NILAI LINK SEBELUM DIKIRIM ===
+        // Log ini akan muncul di konsol CMD Anda.
+        console.log(`[DEBUG] Link Verifikasi yang Dibuat untuk ${email}: ${verificationLink}`);
+        // ===================================================
 
+        // 2. Kirim email
+        // PENTING: Jika link di email masih NULL, masalah ada di file utils/emailSender.js
         const emailSent = await sendVerificationEmail(email, verificationLink);
 
         if (emailSent) {
