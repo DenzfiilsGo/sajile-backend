@@ -127,28 +127,41 @@ exports.login = async (req, res) => {
 
 // FUNGSI UTAMA: Verifikasi Akun dari link email (DIMODIFIKASI UNTUK AUTO-LOGIN)
 exports.verifyAccount = async (req, res) => {
-    try {
-        const token = req.params.token;
+    const token = req.params.token;
 
-        // Cari user berdasarkan token dan pastikan token belum kadaluarsa
+    try {
+        console.log(`[VERIFY ACCOUNT] Menerima token: ${token.substring(0, 10)}...`);
+
+        // 1. Cari user berdasarkan token dan pastikan belum kadaluarsa
+        // Kita gunakan kueri pertama tanpa membatasi waktu kedaluwarsa dulu untuk melihat mengapa gagal
         const user = await User.findOne({
             verificationToken: token,
-            verificationTokenExpires: { $gt: Date.now() } 
         });
 
         if (!user) {
-            // JIKA GAGAL: Redirect ke halaman login/daftar di frontend
-            // Tambahkan parameter error untuk UX yang lebih baik di frontend
+            // Log ke konsol backend
+            console.warn(`[VERIFY ACCOUNT] GAGAL: Token tidak ditemukan di database.`);
+            // Redirect dengan pesan error umum (Token invalid/salah)
             return res.redirect(`${FRONTEND_URL}/html/daftar_atau_login.html?status=verification_failed&error=token_invalid`);
         }
 
-        // AKUN BERHASIL DIVERIFIKASI
+        // 2. Cek apakah token sudah kedaluwarsa setelah pengguna ditemukan
+        if (user.verificationTokenExpires < Date.now()) {
+            // Log ke konsol backend
+            console.warn(`[VERIFY ACCOUNT] GAGAL: Token untuk user ${user.email} sudah kedaluwarsa.`);
+            
+            // Redirect dengan pesan error spesifik (Token expired)
+            return res.redirect(`${FRONTEND_URL}/html/daftar_atau_login.html?status=verification_failed&error=token_expired`);
+        }
+        
+        // 3. AKUN BERHASIL DIVERIFIKASI
         user.isVerified = true;
-        user.verificationToken = undefined;
-        user.verificationTokenExpires = undefined;
+        user.verificationToken = undefined; // Hapus token
+        user.verificationTokenExpires = undefined; // Hapus waktu kedaluwarsa
         await user.save();
+        console.log(`[VERIFY ACCOUNT] SUKSES: Akun user ${user.email} berhasil diverifikasi.`);
 
-        // 1. Berikan Token Login (JWT)
+        // 4. Berikan Token Login (JWT) untuk auto-login
         const payload = {
             user: {
                 id: user.id,
@@ -159,19 +172,21 @@ exports.verifyAccount = async (req, res) => {
         jwt.sign(
             payload,
             process.env.JWT_SECRET,
-            { expiresIn: '7d' }, // Token dibuat lebih lama agar user tidak cepat logout
-            (err, token) => {
-                if (err) throw err;
+            { expiresIn: '7d' }, 
+            (err, loginToken) => { // Ganti nama variabel menjadi loginToken agar tidak ambigu
+                if (err) {
+                    console.error('[VERIFY ACCOUNT] GAGAL membuat Token Login:', err.message);
+                    return res.redirect(`${FRONTEND_URL}/html/daftar_atau_login.html?error=jwt_generation_failed`);
+                }
                 
-                // 2. BERHASIL: Redirect ke halaman utama frontend dengan token di URL
-                // Frontend (beranda.js) akan menangkap token ini dan melakukan auto-login
-                res.redirect(`${FRONTEND_URL}/index.html?token=${token}&status=verified`);
+                // 5. BERHASIL: Redirect ke halaman utama frontend dengan token di URL
+                res.redirect(`${FRONTEND_URL}/index.html?token=${loginToken}&status=verified`);
             }
         );
 
     } catch (err) {
-        console.error(err.message);
-        // Jika ada error internal server, arahkan kembali ke frontend dengan pesan error umum
+        console.error('[VERIFY ACCOUNT] Internal Server Error:', err.message);
+        // Jika ada error internal server (misalnya masalah Mongoose), arahkan kembali ke frontend
         res.redirect(`${FRONTEND_URL}/html/daftar_atau_login.html?error=server_issue`);
     }
 };
