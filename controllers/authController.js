@@ -10,7 +10,7 @@ const { sendVerificationEmail } = require('../utils/emailSender'); // TIDAK ADA 
 
 // URL Frontend dari Environment Variables (HARUS DITAMBAHKAN DI RENDER)
 // Contoh: https://sajile.netlify.app
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5000'; 
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://sajile.netlify.app'; 
 
 
 // Fungsi untuk proses Registrasi Pengguna
